@@ -1,0 +1,21 @@
+# Binaries
+/bin/
+/dist/
+main.exe
+test-wallet.exe
+
+# Environment variables
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+go.work
