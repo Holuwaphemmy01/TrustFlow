@@ -43,8 +43,8 @@ func main() {
 	})
 
 	// Start Server
-	log.Println("Starting TrustFlow Orchestrator on :8080")
-	if err := router.Run(":8080"); err != nil {
+	log.Println("Starting TrustFlow Orchestrator on :8081")
+	if err := router.Run(":8081"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

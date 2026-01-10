@@ -58,9 +58,14 @@ func (s *Simulator) CheckSolvency(ctx context.Context, gasLimit uint64, value *b
 
 	// 4. Compare
 	if balance.Cmp(totalReq) < 0 {
-		return fmt.Errorf("insufficient funds: have %s wei, want %s wei (Gas Cost: %s, Value: %s)", 
+		return fmt.Errorf("insufficient funds: have %s wei, want %s wei (Gas Cost: %s, Value: %s)",
 			balance.String(), totalReq.String(), cost.String(), value.String())
 	}
 
 	return nil
+}
+
+// GetGasPrice retrieves the current gas price from the chain
+func (s *Simulator) GetGasPrice(ctx context.Context) (*big.Int, error) {
+	return s.client.SuggestGasPrice(ctx)
 }

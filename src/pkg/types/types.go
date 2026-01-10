@@ -21,5 +21,6 @@ type SimulationResponse struct {
 	GasLimit  uint64 `json:"gas_limit"`
 	GasPrice  string `json:"gas_price"`
 	TotalCost string `json:"total_cost"`
+	Message   string `json:"message,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
