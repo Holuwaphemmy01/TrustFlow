@@ -10,6 +10,7 @@ import (
 
 	"trustflow/src/internal/config"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -63,6 +64,16 @@ func NewChainClient(cfg *config.Config) (*ChainClient, error) {
 // GetBalance returns the balance of the connected wallet in Wei
 func (c *ChainClient) GetBalance(ctx context.Context) (*big.Int, error) {
 	return c.client.BalanceAt(ctx, c.address, nil)
+}
+
+// SuggestGasPrice retrieves the currently suggested gas price
+func (c *ChainClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	return c.client.SuggestGasPrice(ctx)
+}
+
+// EstimateGas tries to estimate the gas needed to execute a specific transaction
+func (c *ChainClient) EstimateGas(ctx context.Context, callMsg ethereum.CallMsg) (uint64, error) {
+	return c.client.EstimateGas(ctx, callMsg)
 }
 
 // GetAddress returns the public address of the wallet
