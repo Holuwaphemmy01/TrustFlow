@@ -18,11 +18,13 @@ type IntentStep struct {
 
 // IntentResponse is the standard API response for intent submission
 type IntentResponse struct {
-	Status   string   `json:"status"`
-	IntentID string   `json:"intent_id"`
-	Message  string   `json:"message"`
-	TxHash   string   `json:"tx_hash,omitempty"`   // For single step
-	TxHashes []string `json:"tx_hashes,omitempty"` // For multi-step
+	Status          string   `json:"status"`
+	IntentID        string   `json:"intent_id"`
+	Message         string   `json:"message"`
+	TxHash          string   `json:"tx_hash,omitempty"`           // For single step
+	TxHashes        []string `json:"tx_hashes,omitempty"`         // For multi-step
+	FailedStepIndex *int     `json:"failed_step_index,omitempty"` // If failed, which step (0-based)
+	Error           string   `json:"error,omitempty"`             // Error details
 }
 
 // SimulationResponse provides details about a dry-run execution

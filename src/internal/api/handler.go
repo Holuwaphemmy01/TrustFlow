@@ -52,7 +52,15 @@ func (h *Handler) SubmitIntent(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	// Determine status code based on response status
+	statusCode := http.StatusOK
+	if response.Status == "failed" {
+		// If some steps succeeded but later ones failed, it's a partial failure (often 206 or 422, or 502)
+		// 422 Unprocessable Entity seems appropriate if the intent couldn't be fully processed.
+		statusCode = http.StatusUnprocessableEntity
+	}
+
+	c.JSON(statusCode, response)
 }
 
 // SimulateIntent handles the POST /simulate request
