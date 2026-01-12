@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"net/http"
 	"time"
-	"trustflow/src/internal/executor"
+	"trustflow/src/internal/orchestrator"
 	"trustflow/src/internal/simulator"
 	"trustflow/src/pkg/types"
 
@@ -14,14 +14,14 @@ import (
 )
 
 type Handler struct {
-	sim  *simulator.Simulator
-	exec *executor.Executor
+	orch *orchestrator.Orchestrator
+	sim  *simulator.Simulator // Kept for SimulateIntent (dry-run)
 }
 
-func NewHandler(sim *simulator.Simulator, exec *executor.Executor) *Handler {
+func NewHandler(orch *orchestrator.Orchestrator, sim *simulator.Simulator) *Handler {
 	return &Handler{
+		orch: orch,
 		sim:  sim,
-		exec: exec,
 	}
 }
 
@@ -44,43 +44,12 @@ func (h *Handler) SubmitIntent(c *gin.Context) {
 		intent.CreatedAt = time.Now().Unix()
 	}
 
-	// 1. Parse Intent
-	candidate, err := simulator.ParseIntent(intent)
+	// Delegate to Orchestrator
+	response, err := h.orch.ProcessIntent(c.Request.Context(), intent)
 	if err != nil {
-		log.Printf("Intent parsing failed: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Intent: " + err.Error()})
+		log.Printf("Orchestration failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	// 2. Simulate (Safety Check)
-	gasLimit, err := h.sim.Simulate(c.Request.Context(), candidate)
-	if err != nil {
-		log.Printf("Simulation failed: %v", err)
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Simulation Failed: " + err.Error()})
-		return
-	}
-
-	// 3. Solvency Check
-	if err := h.sim.CheckSolvency(c.Request.Context(), gasLimit, candidate.Value); err != nil {
-		log.Printf("Solvency check failed: %v", err)
-		c.JSON(http.StatusPaymentRequired, gin.H{"error": "Insufficient Funds: " + err.Error()})
-		return
-	}
-
-	// 4. Execute Transaction
-	txHash, err := h.exec.Execute(c.Request.Context(), candidate, gasLimit)
-	if err != nil {
-		log.Printf("Execution failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Execution Failed: " + err.Error()})
-		return
-	}
-
-	// Return success response
-	response := types.IntentResponse{
-		Status:   "success",
-		IntentID: intent.ID,
-		Message:  "Transaction executed successfully",
-		TxHash:   txHash,
 	}
 
 	c.JSON(http.StatusOK, response)
