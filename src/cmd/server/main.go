@@ -8,6 +8,7 @@ import (
 	"trustflow/src/internal/executor"
 	"trustflow/src/internal/orchestrator"
 	"trustflow/src/internal/simulator"
+	"trustflow/src/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -33,10 +34,17 @@ func main() {
 	// 4. Initialize Executor
 	exec := executor.NewExecutor(client)
 
-	// 5. Initialize Orchestrator
-	orch := orchestrator.NewOrchestrator(sim, exec)
+	// 5. Initialize Storage
+	store, err := storage.NewStorage("trustflow.db")
+	if err != nil {
+		log.Fatalf("Failed to initialize storage: %v", err)
+	}
+	log.Println("✅ Connected to SQLite Storage")
 
-	// 6. Initialize API Handler
+	// 6. Initialize Orchestrator
+	orch := orchestrator.NewOrchestrator(sim, exec, store)
+
+	// 7. Initialize API Handler
 	handler := api.NewHandler(orch, sim)
 
 	// Initialize Gin router

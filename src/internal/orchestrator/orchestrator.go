@@ -7,18 +7,21 @@ import (
 	"time"
 	"trustflow/src/internal/executor"
 	"trustflow/src/internal/simulator"
+	"trustflow/src/internal/storage"
 	"trustflow/src/pkg/types"
 )
 
 type Orchestrator struct {
-	sim  *simulator.Simulator
-	exec *executor.Executor
+	sim   *simulator.Simulator
+	exec  *executor.Executor
+	store *storage.Storage
 }
 
-func NewOrchestrator(sim *simulator.Simulator, exec *executor.Executor) *Orchestrator {
+func NewOrchestrator(sim *simulator.Simulator, exec *executor.Executor, store *storage.Storage) *Orchestrator {
 	return &Orchestrator{
-		sim:  sim,
-		exec: exec,
+		sim:   sim,
+		exec:  exec,
+		store: store,
 	}
 }
 
@@ -38,12 +41,25 @@ func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (
 
 	var txHashes []string
 
+	// Save Intent to DB
+	if err := o.store.SaveIntent(intent); err != nil {
+		log.Printf("Failed to save intent: %v", err)
+	}
+
 	// 2. Execution Loop
 	for i, step := range steps {
 		log.Printf("🔄 Processing Step %d/%d: %s", i+1, len(steps), step.Action)
 
+		// Save Step to DB
+		if err := o.store.SaveStep(intent.ID, i, step.Action); err != nil {
+			log.Printf("Failed to save step: %v", err)
+		}
+
 		// Helper to return partial failure
 		returnFailure := func(err error) (*types.IntentResponse, error) {
+			o.store.UpdateIntentStatus(intent.ID, "failed", err.Error())
+			o.store.UpdateStepStatus(intent.ID, i, "failed", "", err.Error())
+
 			failedIdx := i
 			return &types.IntentResponse{
 				Status:          "failed",
@@ -76,6 +92,7 @@ func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (
 
 		log.Printf("✅ Step %d Executed. Hash: %s", i+1, txHash)
 		txHashes = append(txHashes, txHash)
+		o.store.UpdateStepStatus(intent.ID, i, "success", txHash, "")
 
 		// D. Wait for Confirmation (if there are more steps)
 		if i < len(steps)-1 {
@@ -83,6 +100,8 @@ func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (
 			time.Sleep(5 * time.Second)
 		}
 	}
+
+	o.store.UpdateIntentStatus(intent.ID, "success", "All steps executed successfully")
 
 	return &types.IntentResponse{
 		Status:   "success",
