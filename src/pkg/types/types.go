@@ -27,6 +27,24 @@ type IntentResponse struct {
 	Error           string   `json:"error,omitempty"`             // Error details
 }
 
+// StepState represents the status of a specific step in the workflow
+type StepState struct {
+	StepIndex int    `json:"step_index"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
+	TxHash    string `json:"tx_hash,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// IntentState represents the full current state of an intent for polling
+type IntentState struct {
+	IntentID  string      `json:"intent_id"`
+	Status    string      `json:"status"`
+	CreatedAt int64       `json:"created_at"`
+	Message   string      `json:"message,omitempty"`
+	Steps     []StepState `json:"steps"`
+}
+
 // SimulationResponse provides details about a dry-run execution
 type SimulationResponse struct {
 	Valid     bool   `json:"valid"`

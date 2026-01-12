@@ -75,6 +75,44 @@ func (s *Storage) SaveIntent(intent types.Intent) error {
 	return err
 }
 
+func (s *Storage) GetIntent(id string) (*types.IntentState, error) {
+	// 1. Get Intent Details
+	var state types.IntentState
+	err := s.db.QueryRow("SELECT id, status, created_at, message FROM intents WHERE id = ?", id).
+		Scan(&state.IntentID, &state.Status, &state.CreatedAt, &state.Message)
+	if err == sql.ErrNoRows {
+		return nil, nil // Not found
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch intent: %w", err)
+	}
+
+	// 2. Get Steps
+	rows, err := s.db.Query(`
+		SELECT step_index, action, status, tx_hash, error_msg 
+		FROM intent_steps 
+		WHERE intent_id = ? 
+		ORDER BY step_index ASC`, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch steps: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var step types.StepState
+		var txHash, errorMsg sql.NullString // Handle nullable fields
+
+		if err := rows.Scan(&step.StepIndex, &step.Action, &step.Status, &txHash, &errorMsg); err != nil {
+			return nil, err
+		}
+		step.TxHash = txHash.String
+		step.Error = errorMsg.String
+		state.Steps = append(state.Steps, step)
+	}
+
+	return &state, nil
+}
+
 func (s *Storage) UpdateIntentStatus(id, status, message string) error {
 	log.Printf("🔄 Updating Intent Status: ID=%s, Status=%s", id, status)
 	_, err := s.db.Exec("UPDATE intents SET status = ?, message = ? WHERE id = ?", status, message, id)

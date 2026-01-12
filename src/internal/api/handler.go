@@ -63,6 +63,29 @@ func (h *Handler) SubmitIntent(c *gin.Context) {
 	c.JSON(statusCode, response)
 }
 
+// GetStatus handles the GET /status/:id request
+func (h *Handler) GetStatus(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing intent ID"})
+		return
+	}
+
+	state, err := h.orch.GetIntentStatus(id)
+	if err != nil {
+		log.Printf("Failed to get status for %s: %v", id, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+
+	if state == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Intent not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, state)
+}
+
 // SimulateIntent handles the POST /simulate request
 func (h *Handler) SimulateIntent(c *gin.Context) {
 	var intent types.Intent

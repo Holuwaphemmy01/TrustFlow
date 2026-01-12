@@ -25,6 +25,11 @@ func NewOrchestrator(sim *simulator.Simulator, exec *executor.Executor, store *s
 	}
 }
 
+// GetIntentStatus retrieves the current state of an intent
+func (o *Orchestrator) GetIntentStatus(id string) (*types.IntentState, error) {
+	return o.store.GetIntent(id)
+}
+
 // ProcessIntent handles both single and multi-step intents
 func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (*types.IntentResponse, error) {
 	// 1. Normalize: Convert single action to a 1-step workflow
