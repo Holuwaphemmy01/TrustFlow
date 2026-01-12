@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"net/http"
 	"time"
+	"trustflow/src/internal/executor"
 	"trustflow/src/internal/simulator"
 	"trustflow/src/pkg/types"
 
@@ -13,11 +14,15 @@ import (
 )
 
 type Handler struct {
-	sim *simulator.Simulator
+	sim  *simulator.Simulator
+	exec *executor.Executor
 }
 
-func NewHandler(sim *simulator.Simulator) *Handler {
-	return &Handler{sim: sim}
+func NewHandler(sim *simulator.Simulator, exec *executor.Executor) *Handler {
+	return &Handler{
+		sim:  sim,
+		exec: exec,
+	}
 }
 
 // SubmitIntent handles the POST /intent request
@@ -62,14 +67,23 @@ func (h *Handler) SubmitIntent(c *gin.Context) {
 		return
 	}
 
-	// Return success response
-	response := types.IntentResponse{
-		Status:   "validated",
-		IntentID: intent.ID,
-		Message:  "Intent validated and safe to execute",
+	// 4. Execute Transaction
+	txHash, err := h.exec.Execute(c.Request.Context(), candidate, gasLimit)
+	if err != nil {
+		log.Printf("Execution failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Execution Failed: " + err.Error()})
+		return
 	}
 
-	c.JSON(http.StatusAccepted, response)
+	// Return success response
+	response := types.IntentResponse{
+		Status:   "success",
+		IntentID: intent.ID,
+		Message:  "Transaction executed successfully",
+		TxHash:   txHash,
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // SimulateIntent handles the POST /simulate request

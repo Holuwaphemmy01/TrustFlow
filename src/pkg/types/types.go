@@ -13,6 +13,7 @@ type IntentResponse struct {
 	Status   string `json:"status"`
 	IntentID string `json:"intent_id"`
 	Message  string `json:"message"`
+	TxHash   string `json:"tx_hash,omitempty"`
 }
 
 // SimulationResponse provides details about a dry-run execution

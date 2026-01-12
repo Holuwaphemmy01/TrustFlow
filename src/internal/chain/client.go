@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -74,6 +75,43 @@ func (c *ChainClient) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
 // EstimateGas tries to estimate the gas needed to execute a specific transaction
 func (c *ChainClient) EstimateGas(ctx context.Context, callMsg ethereum.CallMsg) (uint64, error) {
 	return c.client.EstimateGas(ctx, callMsg)
+}
+
+// SendTransaction builds, signs, and broadcasts a transaction
+func (c *ChainClient) SendTransaction(ctx context.Context, to *common.Address, value *big.Int, data []byte, gasLimit uint64) (string, error) {
+	// 1. Get Nonce
+	nonce, err := c.client.PendingNonceAt(ctx, c.address)
+	if err != nil {
+		return "", fmt.Errorf("failed to get nonce: %w", err)
+	}
+
+	// 2. Get Gas Price (using suggestion)
+	gasPrice, err := c.client.SuggestGasPrice(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get gas price: %w", err)
+	}
+
+	// 3. Create Transaction (Legacy type for broad compatibility)
+	var tx *types.Transaction
+	if to == nil {
+		return "", errors.New("contract creation not yet supported")
+	}
+
+	tx = types.NewTransaction(nonce, *to, value, gasLimit, gasPrice, data)
+
+	// 4. Sign Transaction
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(c.chainID), c.privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
+	// 5. Broadcast
+	err = c.client.SendTransaction(ctx, signedTx)
+	if err != nil {
+		return "", fmt.Errorf("failed to broadcast transaction: %w", err)
+	}
+
+	return signedTx.Hash().Hex(), nil
 }
 
 // GetAddress returns the public address of the wallet

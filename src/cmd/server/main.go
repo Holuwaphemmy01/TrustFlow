@@ -5,6 +5,7 @@ import (
 	"trustflow/src/internal/api"
 	"trustflow/src/internal/chain"
 	"trustflow/src/internal/config"
+	"trustflow/src/internal/executor"
 	"trustflow/src/internal/simulator"
 
 	"github.com/gin-gonic/gin"
@@ -28,8 +29,11 @@ func main() {
 	// 3. Initialize Simulator
 	sim := simulator.NewSimulator(client)
 
-	// 4. Initialize API Handler
-	handler := api.NewHandler(sim)
+	// 4. Initialize Executor
+	exec := executor.NewExecutor(client)
+
+	// 5. Initialize API Handler
+	handler := api.NewHandler(sim, exec)
 
 	// Initialize Gin router
 	router := gin.Default()
