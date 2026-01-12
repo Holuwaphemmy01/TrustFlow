@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  trustflow:
+    build: .
+    container_name: trustflow-server
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    environment:
+      - GIN_MODE=release
+    # Persist the SQLite database
+    volumes:
+      - ./trustflow.db:/root/trustflow.db
+    restart: unless-stopped

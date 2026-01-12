@@ -1,0 +1,9 @@
+.git
+.vscode
+bin
+tmp
+*.exe
+*.log
+trustflow.db
+tests
+.env
