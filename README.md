@@ -2,6 +2,12 @@
 
 TrustFlow is a **security orchestration layer** designed to sit between AI Agents and the Blockchain. It transforms "Black Box" AI decisions into "Glass Box" verifiable workflows, ensuring safety, compliance, and explainability.
 
+### The Problem
+**AI Agents are black boxes.** When an agent triggers a blockchain transaction, developers face a "leap of faith." A single bug, gas spike, or malicious contract can lead to irreversible financial loss.
+
+### The Solution
+TrustFlow provides the **Safety Valve** for the AI Agent economy. We ensure that every AI "Intent" is simulated and validated against real-world constraints before it ever touches the blockchain.
+
 ---
 
 ## 🏗️ Architecture
@@ -26,6 +32,27 @@ graph TD
     Dashboard[Streamlit Dashboard :8501] -->|6. Monitor| API
 ```
 
+### Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent as AI Agent
+    participant TF as TrustFlow Orchestrator
+    participant Sim as Simulator (Dry-Run)
+    participant Chain as Cronos EVM
+
+    Agent->>TF: Submit Payment Intent (JSON)
+    rect rgb(240, 240, 240)
+    Note over TF, Sim: Proactive Validation Phase
+    TF->>Sim: Run Simulation (eth_call)
+    Sim-->>TF: Success: Gas & Balance OK
+    TF->>TF: Check Policy (Budget < $100)
+    end
+    TF->>Chain: Execute x402 Sequence
+    Chain-->>TF: Transaction Hash
+    TF->>Agent: Final Status & Audit Trace
+```
+
 ---
 
 ## 🚀 Features
@@ -34,7 +61,7 @@ graph TD
 Before any funds move, TrustFlow runs a "Dry Run" simulation.
 - **Balance Checks**: Prevents "Insufficient Funds" errors before they hit the chain.
 - **Contract Scanning**: Detects potential reverts or malicious patterns.
-- **Budget Enforcer**: (Mock) Ensures transactions stay within daily limits (e.g., $100).
+- **Budget Enforcement**: Ensures transactions stay within daily limits (e.g., $100).
 
 ### 2. **Fail-Safe Orchestration**
 - **Multi-Step Workflows**: Handles complex sequences (e.g., `Approve` -> `Transfer`).
@@ -55,7 +82,7 @@ Every action is recorded in a local SQLite database (`trustflow.db`), ensuring a
 
 ### Prerequisites
 - Docker & Docker Compose
-- Go 1.25+ (optional, for local dev)
+- Go 1.23+ (optional, for local dev)
 
 ### One-Click Deploy
 Run the entire stack (Server + Dashboard + Database) with a single command:
@@ -116,10 +143,11 @@ TrustFlow/
 
 ---
 
-## 🛠️ Troubleshooting
+## � Roadmap & Vision
 
-- **Database Locked?**: The SQLite DB is mounted as a volume. If you can't open it locally, it might be in use by the container.
-- **Build Errors?**: Ensure you are using the latest Docker version. The build uses `golang:1.25-alpine` to ensure compatibility.
+- **Phase 1**: Multi-Signature Human Approval for large AI transactions.
+- **Phase 2**: Integration with Crypto.com AI Agent SDK.
+- **Phase 3**: Automated "Self-Healing" for stuck transactions.
 
 ---
 
