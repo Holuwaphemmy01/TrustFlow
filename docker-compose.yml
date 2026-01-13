@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   trustflow:
     build: .
@@ -10,7 +8,24 @@ services:
       - .env
     environment:
       - GIN_MODE=release
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     # Persist the SQLite database
     volumes:
       - ./trustflow.db:/root/trustflow.db
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    container_name: trustflow-dashboard
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://trustflow-server:8081
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      - trustflow
     restart: unless-stopped

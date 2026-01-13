@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -39,7 +40,8 @@ func (s *Storage) initSchema() error {
 		id TEXT PRIMARY KEY,
 		status TEXT,
 		created_at INTEGER,
-		message TEXT
+		message TEXT,
+		raw_intent TEXT
 	);`
 
 	createStepsTable := `
@@ -60,13 +62,18 @@ func (s *Storage) initSchema() error {
 	if _, err := s.db.Exec(createStepsTable); err != nil {
 		return err
 	}
+
+	// Migration for existing tables
+	s.db.Exec("ALTER TABLE intents ADD COLUMN raw_intent TEXT")
+
 	return nil
 }
 
 func (s *Storage) SaveIntent(intent types.Intent) error {
 	log.Printf("💾 Saving Intent: ID=%s", intent.ID)
-	_, err := s.db.Exec("INSERT INTO intents (id, status, created_at) VALUES (?, ?, ?)",
-		intent.ID, "pending", time.Now().Unix())
+	rawBytes, _ := json.Marshal(intent)
+	_, err := s.db.Exec("INSERT INTO intents (id, status, created_at, raw_intent) VALUES (?, ?, ?, ?)",
+		intent.ID, "pending", time.Now().Unix(), string(rawBytes))
 	if err != nil {
 		log.Printf("❌ Failed to save intent %s: %v", intent.ID, err)
 	} else {
@@ -78,13 +85,17 @@ func (s *Storage) SaveIntent(intent types.Intent) error {
 func (s *Storage) GetIntent(id string) (*types.IntentState, error) {
 	// 1. Get Intent Details
 	var state types.IntentState
-	err := s.db.QueryRow("SELECT id, status, created_at, message FROM intents WHERE id = ?", id).
-		Scan(&state.IntentID, &state.Status, &state.CreatedAt, &state.Message)
+	var rawIntent sql.NullString
+	err := s.db.QueryRow("SELECT id, status, created_at, message, raw_intent FROM intents WHERE id = ?", id).
+		Scan(&state.IntentID, &state.Status, &state.CreatedAt, &state.Message, &rawIntent)
 	if err == sql.ErrNoRows {
 		return nil, nil // Not found
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch intent: %w", err)
+	}
+	if rawIntent.Valid {
+		state.RawIntent = rawIntent.String
 	}
 
 	// 2. Get Steps
@@ -111,6 +122,25 @@ func (s *Storage) GetIntent(id string) (*types.IntentState, error) {
 	}
 
 	return &state, nil
+}
+
+func (s *Storage) GetRecentIntents(limit int) ([]types.IntentState, error) {
+	rows, err := s.db.Query("SELECT id, status, created_at, message FROM intents ORDER BY created_at DESC LIMIT ?", limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch intents: %w", err)
+	}
+	defer rows.Close()
+
+	var intents []types.IntentState
+	for rows.Next() {
+		var i types.IntentState
+		if err := rows.Scan(&i.IntentID, &i.Status, &i.CreatedAt, &i.Message); err != nil {
+			return nil, err
+		}
+		// We don't fetch steps here to keep listing lightweight
+		intents = append(intents, i)
+	}
+	return intents, nil
 }
 
 func (s *Storage) UpdateIntentStatus(id, status, message string) error {

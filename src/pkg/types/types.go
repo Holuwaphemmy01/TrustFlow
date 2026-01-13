@@ -42,6 +42,7 @@ type IntentState struct {
 	Status    string      `json:"status"`
 	CreatedAt int64       `json:"created_at"`
 	Message   string      `json:"message,omitempty"`
+	RawIntent string      `json:"raw_intent,omitempty"`
 	Steps     []StepState `json:"steps"`
 }
 

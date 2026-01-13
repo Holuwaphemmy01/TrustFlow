@@ -86,6 +86,16 @@ func (h *Handler) GetStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, state)
 }
 
+// ListIntents handles the GET /intents request
+func (h *Handler) ListIntents(c *gin.Context) {
+	intents, err := h.orch.ListIntents(50) // Default limit 50
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch intents"})
+		return
+	}
+	c.JSON(http.StatusOK, intents)
+}
+
 // SimulateIntent handles the POST /simulate request
 func (h *Handler) SimulateIntent(c *gin.Context) {
 	var intent types.Intent

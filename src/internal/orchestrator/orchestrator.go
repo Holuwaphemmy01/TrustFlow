@@ -30,6 +30,11 @@ func (o *Orchestrator) GetIntentStatus(id string) (*types.IntentState, error) {
 	return o.store.GetIntent(id)
 }
 
+// ListIntents retrieves the most recent intents
+func (o *Orchestrator) ListIntents(limit int) ([]types.IntentState, error) {
+	return o.store.GetRecentIntents(limit)
+}
+
 // ProcessIntent handles both single and multi-step intents
 func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (*types.IntentResponse, error) {
 	// 1. Normalize: Convert single action to a 1-step workflow
