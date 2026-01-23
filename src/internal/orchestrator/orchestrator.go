@@ -26,17 +26,17 @@ func NewOrchestrator(sim *simulator.Simulator, exec *executor.Executor, store *s
 }
 
 // GetIntentStatus retrieves the current state of an intent
-func (o *Orchestrator) GetIntentStatus(id string) (*types.IntentState, error) {
-	return o.store.GetIntent(id)
+func (o *Orchestrator) GetIntentStatus(userID string, id string) (*types.IntentState, error) {
+	return o.store.GetIntent(id, userID)
 }
 
 // ListIntents retrieves the most recent intents
-func (o *Orchestrator) ListIntents(limit int) ([]types.IntentState, error) {
-	return o.store.GetRecentIntents(limit)
+func (o *Orchestrator) ListIntents(userID string, limit int) ([]types.IntentState, error) {
+	return o.store.GetRecentIntents(userID, limit)
 }
 
 // ProcessIntent handles both single and multi-step intents
-func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (*types.IntentResponse, error) {
+func (o *Orchestrator) ProcessIntent(ctx context.Context, userID string, intent types.Intent) (*types.IntentResponse, error) {
 	// 1. Normalize: Convert single action to a 1-step workflow
 	steps := intent.Steps
 	if len(steps) == 0 && intent.Action != "" {
@@ -52,7 +52,7 @@ func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (
 	var txHashes []string
 
 	// Save Intent to DB
-	if err := o.store.SaveIntent(intent); err != nil {
+	if err := o.store.SaveIntent(intent, userID); err != nil {
 		log.Printf("Failed to save intent: %v", err)
 	}
 
@@ -61,14 +61,14 @@ func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (
 		log.Printf("🔄 Processing Step %d/%d: %s", i+1, len(steps), step.Action)
 
 		// Save Step to DB
-		if err := o.store.SaveStep(intent.ID, i, step.Action); err != nil {
+		if err := o.store.SaveStep(intent.ID, userID, i, step.Action); err != nil {
 			log.Printf("Failed to save step: %v", err)
 		}
 
 		// Helper to return partial failure
 		returnFailure := func(err error) (*types.IntentResponse, error) {
-			o.store.UpdateIntentStatus(intent.ID, "failed", err.Error())
-			o.store.UpdateStepStatus(intent.ID, i, "failed", "", err.Error())
+			o.store.UpdateIntentStatus(intent.ID, userID, "failed", err.Error())
+			o.store.UpdateStepStatus(intent.ID, userID, i, "failed", "", err.Error())
 
 			failedIdx := i
 			return &types.IntentResponse{
@@ -102,7 +102,7 @@ func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (
 
 		log.Printf("✅ Step %d Executed. Hash: %s", i+1, txHash)
 		txHashes = append(txHashes, txHash)
-		o.store.UpdateStepStatus(intent.ID, i, "success", txHash, "")
+		o.store.UpdateStepStatus(intent.ID, userID, i, "success", txHash, "")
 
 		// D. Wait for Confirmation (if there are more steps)
 		if i < len(steps)-1 {
@@ -111,7 +111,7 @@ func (o *Orchestrator) ProcessIntent(ctx context.Context, intent types.Intent) (
 		}
 	}
 
-	o.store.UpdateIntentStatus(intent.ID, "success", "All steps executed successfully")
+	o.store.UpdateIntentStatus(intent.ID, userID, "success", "All steps executed successfully")
 
 	return &types.IntentResponse{
 		Status:   "success",

@@ -35,26 +35,28 @@ func NewStorage(dbPath string) (*Storage, error) {
 }
 
 func (s *Storage) initSchema() error {
-	createIntentsTable := `
-	CREATE TABLE IF NOT EXISTS intents (
-		id TEXT PRIMARY KEY,
-		status TEXT,
-		created_at INTEGER,
-		message TEXT,
-		raw_intent TEXT
-	);`
+    createIntentsTable := `
+    CREATE TABLE IF NOT EXISTS intents (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        status TEXT,
+        created_at INTEGER,
+        message TEXT,
+        raw_intent TEXT
+    );`
 
-	createStepsTable := `
-	CREATE TABLE IF NOT EXISTS intent_steps (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		intent_id TEXT,
-		step_index INTEGER,
-		action TEXT,
-		tx_hash TEXT,
-		status TEXT,
-		error_msg TEXT,
-		FOREIGN KEY(intent_id) REFERENCES intents(id)
-	);`
+    createStepsTable := `
+    CREATE TABLE IF NOT EXISTS intent_steps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        intent_id TEXT,
+        user_id TEXT,
+        step_index INTEGER,
+        action TEXT,
+        tx_hash TEXT,
+        status TEXT,
+        error_msg TEXT,
+        FOREIGN KEY(intent_id) REFERENCES intents(id)
+    );`
 
 	if _, err := s.db.Exec(createIntentsTable); err != nil {
 		return err
@@ -63,31 +65,32 @@ func (s *Storage) initSchema() error {
 		return err
 	}
 
-	// Migration for existing tables
-	s.db.Exec("ALTER TABLE intents ADD COLUMN raw_intent TEXT")
+    s.db.Exec("ALTER TABLE intents ADD COLUMN raw_intent TEXT")
+    s.db.Exec("ALTER TABLE intents ADD COLUMN user_id TEXT")
+    s.db.Exec("ALTER TABLE intent_steps ADD COLUMN user_id TEXT")
 
 	return nil
 }
 
-func (s *Storage) SaveIntent(intent types.Intent) error {
-	log.Printf("💾 Saving Intent: ID=%s", intent.ID)
-	rawBytes, _ := json.Marshal(intent)
-	_, err := s.db.Exec("INSERT INTO intents (id, status, created_at, raw_intent) VALUES (?, ?, ?, ?)",
-		intent.ID, "pending", time.Now().Unix(), string(rawBytes))
-	if err != nil {
-		log.Printf("❌ Failed to save intent %s: %v", intent.ID, err)
-	} else {
-		log.Printf("✅ Saved Intent %s", intent.ID)
-	}
-	return err
+func (s *Storage) SaveIntent(intent types.Intent, userID string) error {
+    log.Printf("💾 Saving Intent: ID=%s", intent.ID)
+    rawBytes, _ := json.Marshal(intent)
+    _, err := s.db.Exec("INSERT INTO intents (id, user_id, status, created_at, raw_intent) VALUES (?, ?, ?, ?, ?)",
+        intent.ID, userID, "pending", time.Now().Unix(), string(rawBytes))
+    if err != nil {
+        log.Printf("❌ Failed to save intent %s: %v", intent.ID, err)
+    } else {
+        log.Printf("✅ Saved Intent %s", intent.ID)
+    }
+    return err
 }
 
-func (s *Storage) GetIntent(id string) (*types.IntentState, error) {
+func (s *Storage) GetIntent(id string, userID string) (*types.IntentState, error) {
 	// 1. Get Intent Details
 	var state types.IntentState
 	var rawIntent sql.NullString
-	err := s.db.QueryRow("SELECT id, status, created_at, message, raw_intent FROM intents WHERE id = ?", id).
-		Scan(&state.IntentID, &state.Status, &state.CreatedAt, &state.Message, &rawIntent)
+    err := s.db.QueryRow("SELECT id, status, created_at, message, raw_intent FROM intents WHERE id = ? AND user_id = ?", id, userID).
+        Scan(&state.IntentID, &state.Status, &state.CreatedAt, &state.Message, &rawIntent)
 	if err == sql.ErrNoRows {
 		return nil, nil // Not found
 	}
@@ -99,11 +102,11 @@ func (s *Storage) GetIntent(id string) (*types.IntentState, error) {
 	}
 
 	// 2. Get Steps
-	rows, err := s.db.Query(`
-		SELECT step_index, action, status, tx_hash, error_msg 
-		FROM intent_steps 
-		WHERE intent_id = ? 
-		ORDER BY step_index ASC`, id)
+    rows, err := s.db.Query(`
+        SELECT step_index, action, status, tx_hash, error_msg 
+        FROM intent_steps 
+        WHERE intent_id = ? AND user_id = ?
+        ORDER BY step_index ASC`, id, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch steps: %w", err)
 	}
@@ -124,8 +127,8 @@ func (s *Storage) GetIntent(id string) (*types.IntentState, error) {
 	return &state, nil
 }
 
-func (s *Storage) GetRecentIntents(limit int) ([]types.IntentState, error) {
-	rows, err := s.db.Query("SELECT id, status, created_at, message FROM intents ORDER BY created_at DESC LIMIT ?", limit)
+func (s *Storage) GetRecentIntents(userID string, limit int) ([]types.IntentState, error) {
+    rows, err := s.db.Query("SELECT id, status, created_at, message FROM intents WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", userID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch intents: %w", err)
 	}
@@ -143,32 +146,32 @@ func (s *Storage) GetRecentIntents(limit int) ([]types.IntentState, error) {
 	return intents, nil
 }
 
-func (s *Storage) UpdateIntentStatus(id, status, message string) error {
-	log.Printf("🔄 Updating Intent Status: ID=%s, Status=%s", id, status)
-	_, err := s.db.Exec("UPDATE intents SET status = ?, message = ? WHERE id = ?", status, message, id)
+func (s *Storage) UpdateIntentStatus(id, userID, status, message string) error {
+    log.Printf("🔄 Updating Intent Status: ID=%s, Status=%s", id, status)
+    _, err := s.db.Exec("UPDATE intents SET status = ?, message = ? WHERE id = ? AND user_id = ?", status, message, id, userID)
 	if err != nil {
 		log.Printf("❌ Failed to update intent status %s: %v", id, err)
 	}
 	return err
 }
 
-func (s *Storage) SaveStep(intentID string, stepIndex int, action string) error {
-	log.Printf("💾 Saving Step: IntentID=%s, Index=%d, Action=%s", intentID, stepIndex, action)
-	_, err := s.db.Exec("INSERT INTO intent_steps (intent_id, step_index, action, status) VALUES (?, ?, ?, ?)",
-		intentID, stepIndex, action, "pending")
+func (s *Storage) SaveStep(intentID string, userID string, stepIndex int, action string) error {
+    log.Printf("💾 Saving Step: IntentID=%s, Index=%d, Action=%s", intentID, stepIndex, action)
+    _, err := s.db.Exec("INSERT INTO intent_steps (intent_id, user_id, step_index, action, status) VALUES (?, ?, ?, ?, ?)",
+        intentID, userID, stepIndex, action, "pending")
 	if err != nil {
 		log.Printf("❌ Failed to save step for intent %s: %v", intentID, err)
 	}
 	return err
 }
 
-func (s *Storage) UpdateStepStatus(intentID string, stepIndex int, status, txHash, errorMsg string) error {
-	log.Printf("🔄 Updating Step Status: IntentID=%s, Index=%d, Status=%s, TxHash=%s", intentID, stepIndex, status, txHash)
-	_, err := s.db.Exec(`
-		UPDATE intent_steps 
-		SET status = ?, tx_hash = ?, error_msg = ? 
-		WHERE intent_id = ? AND step_index = ?`,
-		status, txHash, errorMsg, intentID, stepIndex)
+func (s *Storage) UpdateStepStatus(intentID string, userID string, stepIndex int, status, txHash, errorMsg string) error {
+    log.Printf("🔄 Updating Step Status: IntentID=%s, Index=%d, Status=%s, TxHash=%s", intentID, stepIndex, status, txHash)
+    _, err := s.db.Exec(`
+        UPDATE intent_steps 
+        SET status = ?, tx_hash = ?, error_msg = ? 
+        WHERE intent_id = ? AND user_id = ? AND step_index = ?`,
+        status, txHash, errorMsg, intentID, userID, stepIndex)
 	if err != nil {
 		log.Printf("❌ Failed to update step status for intent %s: %v", intentID, err)
 	}

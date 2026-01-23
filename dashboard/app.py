@@ -9,7 +9,8 @@ import os
 
 # Configuration
 # Read from env var if available (Docker), else default to localhost for local dev
-API_URL = os.getenv("API_URL", "http://localhost:8081") 
+API_URL = os.getenv("API_URL", "http://localhost:8081")
+USER_ADDRESS = os.getenv("USER_ADDRESS", "")
 
 st.set_page_config(
     page_title="TrustFlow Transparency Dashboard",
@@ -21,6 +22,7 @@ st.title("🛡️ TrustFlow Transparency Dashboard")
 
 # --- Sidebar: Refresh & Stats ---
 st.sidebar.header("Control Panel")
+wallet = st.sidebar.text_input("Wallet Address", value=USER_ADDRESS)
 if st.sidebar.button("Refresh Data"):
     st.rerun()
 
@@ -30,10 +32,11 @@ if auto_refresh:
     st.rerun()
 
 # --- Fetch Data ---
-@st.cache_data(ttl=2) # Short cache to prevent spamming but allow quick updates
-def fetch_intents():
+@st.cache_data(ttl=2)
+def fetch_intents(wallet_addr):
     try:
-        response = requests.get(f"{API_URL}/intents")
+        headers = {"X-User-Address": wallet_addr} if wallet_addr else {}
+        response = requests.get(f"{API_URL}/intents", headers=headers)
         if response.status_code == 200:
             return response.json()
         else:
@@ -43,7 +46,7 @@ def fetch_intents():
         st.error(f"Connection error: {e}")
         return []
 
-intents_data = fetch_intents()
+intents_data = fetch_intents(wallet)
 
 # --- Overview Stats ---
 if intents_data:
@@ -100,7 +103,8 @@ else:
     
     if selected_id:
         try:
-            details_resp = requests.get(f"{API_URL}/status/{selected_id}")
+            headers = {"X-User-Address": wallet} if wallet else {}
+            details_resp = requests.get(f"{API_URL}/status/{selected_id}", headers=headers)
             if details_resp.status_code == 200:
                 details = details_resp.json()
                 

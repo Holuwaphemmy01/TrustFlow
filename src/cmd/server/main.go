@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"trustflow/src/internal/api"
 	"trustflow/src/internal/chain"
 	"trustflow/src/internal/config"
@@ -51,6 +53,22 @@ func main() {
 	// Initialize Gin router
 	router := gin.Default()
 
+	// Middleware enforcing X-User-Address header
+	requireUserHeader := func(c *gin.Context) {
+		user := c.GetHeader("X-User-Address")
+		if user == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-User-Address header"})
+			c.Abort()
+			return
+		}
+		if !strings.HasPrefix(user, "0x") || len(user) != 42 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid wallet address"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+
 	openAPISpec := `{
 	  "openapi": "3.0.0",
 	  "info": {
@@ -80,9 +98,10 @@ func main() {
 	      }
 	    },
 	    "/intent": {
-	      "post": {
-	        "summary": "Submit intent",
-	        "description": "Submit a single action or multi-step workflow for execution",
+      "post": {
+        "summary": "Submit intent",
+        "description": "Submit a single action or multi-step workflow for execution",
+        "parameters": [ { "$ref": "#/components/parameters/UserAddressHeader" } ],
 	        "requestBody": {
 	          "required": true,
 	          "content": {
@@ -177,9 +196,10 @@ func main() {
 	      }
 	    },
 	    "/simulate": {
-	      "post": {
-	        "summary": "Dry-run simulation",
-	        "description": "Pre-flight checks including gas estimate and price",
+      "post": {
+        "summary": "Dry-run simulation",
+        "description": "Pre-flight checks including gas estimate and price",
+        "parameters": [ { "$ref": "#/components/parameters/UserAddressHeader" } ],
 	        "requestBody": {
 	          "required": true,
 	          "content": {
@@ -241,9 +261,10 @@ func main() {
 	      "get": {
 	        "summary": "Get intent status",
 	        "description": "Retrieve the current state of a submitted intent including step results",
-	        "parameters": [
-	          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
-	        ],
+        "parameters": [
+          { "$ref": "#/components/parameters/UserAddressHeader" },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
 	        "responses": {
 	          "200": {
 	            "description": "Current intent state",
@@ -277,9 +298,10 @@ func main() {
 	      }
 	    },
 	    "/intents": {
-	      "get": {
-	        "summary": "List recent intents",
-	        "description": "List latest intents (default limit 50)",
+      "get": {
+        "summary": "List recent intents",
+        "description": "List latest intents (default limit 50)",
+        "parameters": [ { "$ref": "#/components/parameters/UserAddressHeader" } ],
 	        "responses": {
 	          "200": {
 	            "description": "List of intents",
@@ -300,8 +322,17 @@ func main() {
 	      }
 	    }
 	  },
-	  "components": {
-	    "schemas": {
+  "components": {
+    "parameters": {
+      "UserAddressHeader": {
+        "name": "X-User-Address",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "Wallet address used for data scoping"
+      }
+    },
+    "schemas": {
 	      "Intent": {
 	        "type": "object",
 	        "properties": {
@@ -383,10 +414,12 @@ func main() {
 	swaggerHTML := `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>TrustFlow API Docs</title><link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"/></head><body><div id="swagger-ui"></div><script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script><script>window.ui=SwaggerUIBundle({url:'/openapi.json',dom_id:'#swagger-ui'});</script></body></html>`
 
 	// Define Routes
-	router.POST("/intent", handler.SubmitIntent)
-	router.POST("/simulate", handler.SimulateIntent)
-	router.GET("/status/:id", handler.GetStatus)
-	router.GET("/intents", handler.ListIntents)
+	apiGroup := router.Group("/")
+	apiGroup.Use(requireUserHeader)
+	apiGroup.POST("/intent", handler.SubmitIntent)
+	apiGroup.POST("/simulate", handler.SimulateIntent)
+	apiGroup.GET("/status/:id", handler.GetStatus)
+	apiGroup.GET("/intents", handler.ListIntents)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "ok",
@@ -401,8 +434,12 @@ func main() {
 	})
 
 	// Start Server
-	log.Println("Starting TrustFlow Orchestrator on :8081")
-	if err := router.Run(":8081"); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8081"
+	}
+	log.Println("Starting TrustFlow Orchestrator on :" + port)
+	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }

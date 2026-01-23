@@ -45,7 +45,8 @@ func (h *Handler) SubmitIntent(c *gin.Context) {
 	}
 
 	// Delegate to Orchestrator
-	response, err := h.orch.ProcessIntent(c.Request.Context(), intent)
+	userID := c.GetHeader("X-User-Address")
+	response, err := h.orch.ProcessIntent(c.Request.Context(), userID, intent)
 	if err != nil {
 		log.Printf("Orchestration failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -71,7 +72,8 @@ func (h *Handler) GetStatus(c *gin.Context) {
 		return
 	}
 
-	state, err := h.orch.GetIntentStatus(id)
+	userID := c.GetHeader("X-User-Address")
+	state, err := h.orch.GetIntentStatus(userID, id)
 	if err != nil {
 		log.Printf("Failed to get status for %s: %v", id, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
@@ -88,7 +90,8 @@ func (h *Handler) GetStatus(c *gin.Context) {
 
 // ListIntents handles the GET /intents request
 func (h *Handler) ListIntents(c *gin.Context) {
-	intents, err := h.orch.ListIntents(50) // Default limit 50
+	userID := c.GetHeader("X-User-Address")
+	intents, err := h.orch.ListIntents(userID, 50)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch intents"})
 		return
